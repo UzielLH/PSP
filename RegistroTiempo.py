@@ -31,7 +31,7 @@ class RegistroTiempo(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Registro de Tiempo")
-        self.geometry("1000x600")
+        self.geometry("1200x600")
         self.resizable(False, False)
 
         # Configuración del estilo usando ttk.
@@ -49,9 +49,15 @@ class RegistroTiempo(tk.Tk):
 
         self.show_instructions()
 
+        style = ttk.Style(self)
+        style.theme_use("clam")  # O el que estés utilizando
+        style.configure("DefectoActivo.TButton", foreground="white", background="red")
+
+
         # Seleccionar o crear el archivo de datos (.txt)
         self.filename = self.select_or_create_file()
         self.data = self.load_data()
+        self.defects = self.data.get('defects', [])   # <-- Agrega esta línea aquí
         self.activities = self.data.get('activities', {})
         self.total_paused_minutes = self.data.get('total_paused_minutes', 0)
         self.activity_logs = self.data.get('activity_logs', [])
@@ -132,6 +138,22 @@ class RegistroTiempo(tk.Tk):
         self.new_project_button = ttk.Button(additional_buttons_frame, text="Nuevo Proyecto", command=self.change_project, width=20)
         self.new_project_button.grid(row=0, column=3, padx=5, pady=5)
 
+        # Marco para botones de defectos en una nueva línea
+        defect_buttons_frame = ttk.Frame(self)
+        defect_buttons_frame.pack(pady=10)
+
+        # Botón para registrar defectos
+        self.defect_button = ttk.Button(defect_buttons_frame, text="Registrar defectos", command=self.open_defect_form, state="disabled")
+        self.defect_button.grid(row=0, column=0, padx=5, pady=5)
+
+        # Botón para producir el PDF de defectos
+        self.pdf_defects_button = ttk.Button(defect_buttons_frame, text="PDF Defectos", command=self.produce_defects_pdf, width=20)
+        self.pdf_defects_button.grid(row=0, column=1, padx=5, pady=5)
+
+        # Botón para visualizar la tabla de defectos
+        self.defects_table_button = ttk.Button(defect_buttons_frame, text="Tabla de Defectos", command=self.show_defects_table, width=20)
+        self.defects_table_button.grid(row=0, column=2, padx=5, pady=5)
+        
         # Variables para el cronómetro y control de actividad.
         self.start_time = None
         self.pause_time = None
@@ -191,21 +213,38 @@ class RegistroTiempo(tk.Tk):
     def get_project_details(self):
         # Validar que el nombre del proyecto no esté vacío.
         while True:
-            project_name = simpledialog.askstring("Nuevo Proyecto", "Ingrese el nombre del proyecto:")
+            project_name = simpledialog.askstring("Nuevo Proyecto", "Ingrese el nombre del proyecto:", parent=self)
             if project_name:
                 break
             else:
                 messagebox.showerror("Error", "El nombre del proyecto no puede estar vacío. Intente nuevamente.")
+        # Validar que el nombre del estudiante no esté vacío.
+        while True:
+            student_name = simpledialog.askstring("Nuevo Proyecto", "Ingrese el nombre del estudiante:", parent=self)
+            if student_name:
+                break
+            else:
+                messagebox.showerror("Error", "El nombre del estudiante no puede estar vacío. Intente nuevamente.")
         
+        # Validar que el nombre del instructor no esté vacío.
+        while True:
+            instructor_name = simpledialog.askstring("Nuevo Proyecto", "Ingrese el nombre del instructor:", parent=self)
+            if instructor_name:
+                break
+            else:
+                messagebox.showerror("Error", "El nombre del instructor no puede estar vacío. Intente nuevamente.")
         # Validación de la fecha en el formato dd/mm/aaaa.
         while True:
-            start_date = simpledialog.askstring("Nuevo Proyecto", "Ingrese la fecha de inicio (dd/mm/aaaa):")
+            start_date = simpledialog.askstring("Nuevo Proyecto", "Ingrese la fecha de inicio (dd/mm/aaaa):", parent=self)
             try:
                 # Intentamos parsear la fecha para validar el formato.
                 datetime.strptime(start_date, "%d/%m/%Y")
                 break  # La fecha es válida, salimos del ciclo.
             except (ValueError, TypeError):
                 messagebox.showerror("Error", "La fecha ingresada no es válida. Asegúrese de usar el formato dd/mm/aaaa.")
+        
+        self.data['student_name'] = student_name
+        self.data['instructor_name'] = instructor_name
         return project_name, start_date
 
     def update_current_time(self):
@@ -243,6 +282,7 @@ class RegistroTiempo(tk.Tk):
             self.start_button.config(state="disabled")
             self.pause_button.config(state="normal", text="Pausar")
             self.stop_button.config(state="normal")
+            self.defect_button.config(state="normal", style="DefectoActivo.TButton")
             self.timer_running = True
             self.is_paused = False
             self.notification_shown = False  # Reinicia la notificación
@@ -277,12 +317,7 @@ class RegistroTiempo(tk.Tk):
             self.after(1000, self.update_elapsed_time)
 
     def show_notification(self):
-        def ring_bell():
-            while self.notification_shown:
-                self.bell()
-                time.sleep(1)  # Ajusta el intervalo de tiempo si es necesario
-
-        threading.Thread(target=ring_bell, daemon=True).start()
+        self.bell()
         messagebox.showinfo("Notificación", f"La actividad '{self.current_activity}' ha durado 60 minutos o más.")
         self.notification_shown = False
 
@@ -335,11 +370,121 @@ class RegistroTiempo(tk.Tk):
         self.start_button.config(state="normal")
         self.pause_button.config(state="disabled", text="Pausar")
         self.stop_button.config(state="disabled")
+        self.defect_button.config(state="disabled", style="TButton")
         self.timer_running = False
         self.elapsed_time_label.config(text="00:00:00")
         self.paused_time_label.config(text="00:00:00")
         self.activity_name_label.config(text="")
         self.show_statistics()
+
+    def open_defect_form(self):
+        # Crear ventana para registrar defecto
+        defect_window = tk.Toplevel(self) 
+        defect_window.title("Registrar Defecto") 
+        defect_window.geometry("400x600") 
+        defect_window.transient(self) 
+        defect_window.grab_set()
+        # Fecha: obtener la fecha actual en formato dd/mm/aaaa
+        current_date = datetime.now().strftime("%d/%m/%Y")
+
+        # Número: se calcula en base a la cantidad de defectos guardados
+        defect_number = len(self.defects) + 1
+
+        # Campo Fecha
+        tk.Label(defect_window, text="Fecha:").pack(anchor="w", padx=10, pady=5)
+        fecha_entry = tk.Entry(defect_window)
+        fecha_entry.pack(fill="x", padx=10)
+        fecha_entry.insert(0, current_date)
+        fecha_entry.config(state="readonly")
+
+        # Campo Número
+        tk.Label(defect_window, text="Número:").pack(anchor="w", padx=10, pady=5)
+        numero_entry = tk.Entry(defect_window)
+        numero_entry.pack(fill="x", padx=10)
+        numero_entry.insert(0, str(defect_number))
+        numero_entry.config(state="readonly")
+
+        # Campo Tipo
+        tk.Label(defect_window, text="Tipo:").pack(anchor="w", padx=10, pady=5)
+        tipos = [ "10.- Documentación", "20.- Sintáxis", "30.- Construcción, Empacar", "40.- Asignación", "50.- Interfaz", "60.- Chequeo", "70.- Datos", "80.- Función", "90.- Sistema", "100.- Ambiente" ] 
+        tipo_cb = ttk.Combobox(defect_window, values=tipos, state="readonly") 
+        tipo_cb.pack(fill="x", padx=10) 
+        tipo_cb.current(0)
+
+        # Campo Encontrado (lista de actividades)
+        tk.Label(defect_window, text="Encontrado:").pack(anchor="w", padx=10, pady=5)
+        encontrado_cb = ttk.Combobox(defect_window, values=self.activities_list, state="readonly")
+        encontrado_cb.pack(fill="x", padx=10)
+        if self.activities_list:
+            encontrado_cb.current(0)
+
+        # Campo Removido (actividad actual)
+        tk.Label(defect_window, text="Removido:").pack(anchor="w", padx=10, pady=5)
+        removido_entry = tk.Entry(defect_window)
+        removido_entry.pack(fill="x", padx=10)
+        if self.current_activity:
+            removido_entry.insert(0, self.current_activity)
+        removido_entry.config(state="readonly")
+
+        # Tiempo de compostura: cronómetro que inicia al abrir el formulario
+        tk.Label(defect_window, text="Tiempo de compostura:").pack(anchor="w", padx=10, pady=5)
+        tiempo_label = tk.Label(defect_window, text="00:00:00", font=("Helvetica", 12))
+        tiempo_label.pack(fill="x", padx=10)
+
+        start_defect_time = datetime.now()
+        def update_defect_timer():
+            elapsed = datetime.now() - start_defect_time
+            tiempo_label.config(text=str(elapsed).split(".")[0])
+            if not getattr(defect_window, "timer_stopped", False):
+                defect_window.after(1000, update_defect_timer)
+        defect_window.timer_stopped = False
+        update_defect_timer()
+
+        # Campo Defecto arreglado (Si o No)
+        tk.Label(defect_window, text="Defecto arreglado:").pack(anchor="w", padx=10, pady=5)
+        arreglado_cb = ttk.Combobox(defect_window, values=["X", "✓"], state="readonly")
+        arreglado_cb.pack(fill="x", padx=10)
+        arreglado_cb.current(0)
+
+        # Campo Descripción
+        tk.Label(defect_window, text="Descripción:").pack(anchor="w", padx=10, pady=5)
+        descripcion_text = tk.Text(defect_window, height=5)
+        descripcion_text.pack(fill="both", padx=10, pady=5)
+
+        # Función para guardar el defecto
+        def save_defect():
+            defect_window.timer_stopped = True
+            elapsed_str = tiempo_label.cget("text")
+            h, m, s = map(int, elapsed_str.split(":"))
+            total_minutes = h * 60 + m
+            #tomamos solo la parte entera de minutos
+            
+            # Obtener solo el número del tipo seleccionado
+            tipo_seleccionado = tipo_cb.get()  # Ej: "10.- Documentación"
+            numero_tipo = tipo_seleccionado.split('.-')[0].strip()  # Extrae "10"
+
+            defect_record = {
+                "fecha": fecha_entry.get(),
+                "numero": numero_entry.get(),
+                "tipo": numero_tipo, # Solo el número
+                "encontrado": encontrado_cb.get(),
+                "removido": removido_entry.get(),
+                "tiempo_compostura": total_minutes,
+                "defecto_arreglado": arreglado_cb.get(),
+                "descripcion": descripcion_text.get("1.0", "end").strip()
+            }
+            self.defects.append(defect_record)
+            self.data["defects"] = self.defects
+            self.save_data()
+            messagebox.showinfo("Defecto guardado", "El defecto ha sido guardado correctamente.")
+            defect_window.destroy()
+
+        # Botón Guardar
+        guardar_button = ttk.Button(defect_window, text="Guardar", command=save_defect)
+        guardar_button.pack(padx=10, pady=10)
+
+
+
 
     def load_data(self):
         try:
@@ -353,6 +498,12 @@ class RegistroTiempo(tk.Tk):
             data['total_paused_minutes'] = 0
         if 'activity_logs' not in data:
             data['activity_logs'] = []
+        if 'student_name' not in data:
+            data['student_name'] = ''
+        if 'instructor_name' not in data:
+            data['instructor_name'] = ''
+        if 'defects' not in data:
+            data['defects'] = []
         return data
 
     def save_data(self):
@@ -360,9 +511,12 @@ class RegistroTiempo(tk.Tk):
             data = {
                 'project_name': self.project_name,
                 'start_date': self.start_date,
+                'student_name': self.data.get('student_name', ''),
+                'instructor_name': self.data.get('instructor_name', ''),
                 'activities': self.activities,
                 'total_paused_minutes': self.total_paused_minutes,
-                'activity_logs': self.activity_logs
+                'activity_logs': self.activity_logs,
+                'defects': self.defects
             }
             json.dump(data, file, indent=4, ensure_ascii=False)
 
@@ -603,6 +757,141 @@ class RegistroTiempo(tk.Tk):
         doc.build(Story, onFirstPage=header, onLaterPages=header)
         messagebox.showinfo("PDF Generado", "El PDF ha sido generado exitosamente.")
 
+    def produce_defects_pdf(self):
+        """
+        Genera un PDF en orientación horizontal con:
+        - Tipos de defectos en la parte superior.
+        - Datos de estudiante, instructor, fecha de generación, proyecto.
+        - Tabla de defectos: Fecha, Número, Tipo, Encontrado, Removido, Tiempo de compostura, Defecto arreglado, Descripción
+        """
+        # 1. Pedir ruta donde guardar el PDF
+        pdf_file = filedialog.asksaveasfilename(
+            title="Guardar PDF de Defectos",
+            defaultextension=".pdf",
+            filetypes=[("PDF Files", "*.pdf")]
+        )
+        if not pdf_file:
+            return  # Si el usuario cancela, no hace nada
+
+        # 2. Configurar el documento en orientación horizontal (landscape)
+        doc = SimpleDocTemplate(
+            pdf_file,
+            pagesize=landscape(letter),
+            title="Reporte de Defectos",
+            author="Registro de Tiempo",
+            leftMargin=2 * cm,
+            rightMargin=2 * cm,
+            topMargin=2 * cm,
+            bottomMargin=2 * cm
+        )
+
+        styles = getSampleStyleSheet()
+        style_normal = styles["Normal"]
+        style_title = styles["Title"]
+        style_heading = styles["Heading2"]
+
+        # 3. Función para dibujar el encabezado en cada página
+        def header(canvas, doc):
+            canvas.saveState()
+            width, height = doc.pagesize
+
+            # Encabezado principal
+            text_encabezado = f"Reporte de Defectos - Proyecto: {self.project_name}"
+            canvas.setFont('Helvetica-Bold', 12)
+            canvas.drawCentredString(width / 2.0, height - 30, text_encabezado)
+
+            # Fecha de generación
+            fecha_hoy = datetime.now().strftime("%d/%m/%Y")
+            text_fecha = f"Fecha de generación: {fecha_hoy}"
+            canvas.setFont('Helvetica', 10)
+            canvas.drawCentredString(width / 2.0, height - 45, text_fecha)
+
+            canvas.restoreState()
+
+        Story = []
+
+        # 4. Agregar datos del alumno, instructor, fecha inicio y tipos de defectos en la parte superior
+        #   - Estudiante, Instructor, Fecha de inicio, etc. están en self.data (o en variables)
+        estudiante = self.data.get('student_name', 'No especificado')
+        instructor = self.data.get('instructor_name', 'No especificado')
+        fecha_inicio = self.data.get('start_date', 'No especificada')
+        #   - O si prefieres usar datetime.strptime(fecha_inicio, '%d/%m/%Y') para formatear.
+
+        # Título del PDF
+        Story.append(Paragraph("Formato del Registro de Defectos", style_heading))
+        Story.append(Spacer(1, 12))
+
+        # Datos de alumno, instructor, fecha, proyecto
+        info_text = (
+            f"<b>Estudiante:</b> {estudiante} &nbsp;&nbsp;&nbsp;"
+            f"<b>Instructor:</b> {instructor} &nbsp;&nbsp;&nbsp;"
+            f"<b>Fecha Inicio:</b> {fecha_inicio} &nbsp;&nbsp;&nbsp;"
+            f"<b>Proyecto:</b> {self.project_name}"
+        )
+        Story.append(Paragraph(info_text, style_normal))
+        Story.append(Spacer(1, 12))
+
+        # Lista de tipos de defectos (sección superior)
+        tipos_defectos_text = (
+            "Tipos de Defectos:<br/>"
+            "10 Documentación &nbsp;&nbsp; 20 Sintáxis &nbsp;&nbsp; 30 Construcción, Empacar &nbsp;&nbsp; 40 Asignación<br/>"
+            "50 Interfaz &nbsp;&nbsp; 60 Chequeo &nbsp;&nbsp; 70 Datos &nbsp;&nbsp; 80 Función &nbsp;&nbsp; 90 Sistema &nbsp;&nbsp; 100 Ambiente"
+        )
+        Story.append(Paragraph(tipos_defectos_text, style_normal))
+        Story.append(Spacer(1, 12))
+
+        # 5. Construir la tabla de defectos
+        #    Encabezados
+        headers = [
+            "Fecha",
+            "Número",
+            "Tipo",
+            "Encontrado",
+            "Removido",
+            "T. de compostura",
+            "Defecto arreglado",
+            "Descripción"
+        ]
+        table_data = [headers]
+
+        #    Cargar los defectos de self.defects
+        for defect in self.defects:
+            row = [
+                Paragraph(defect.get("fecha", ""), style_normal),
+                Paragraph(defect.get("numero", ""), style_normal),
+                Paragraph(str(defect.get("tipo", "")), style_normal),
+                Paragraph(defect.get("encontrado", ""), style_normal),
+                Paragraph(defect.get("removido", ""), style_normal),
+                Paragraph(str(defect.get("tiempo_compostura", "")), style_normal),
+                Paragraph(defect.get("defecto_arreglado", ""), style_normal),
+                Paragraph(defect.get("descripcion", ""), style_normal)
+            ]
+            table_data.append(row)
+
+        # 6. Crear la tabla con reportlab
+        #    Ajustar anchos de columna si lo deseas
+        defect_table = Table(table_data, repeatRows=1)
+
+        defect_table = Table(table_data,  repeatRows=1)
+        defect_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ]))
+
+        Story.append(defect_table)
+
+        # 7. Generar el documento
+        doc.build(Story, onFirstPage=header, onLaterPages=header)
+
+        messagebox.showinfo("PDF Generado", "El PDF de defectos ha sido generado exitosamente.")
+
+
     def show_table(self):
         """Abre una nueva ventana que muestra los registros en una tabla."""
         table_window = tk.Toplevel(self)
@@ -649,6 +938,44 @@ class RegistroTiempo(tk.Tk):
         scrollbar = ttk.Scrollbar(table_window, orient="vertical", command=tree.yview)
         tree.configure(yscroll=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
+
+    def show_defects_table(self):
+        """Abre una nueva ventana que muestra los defectos en una tabla."""
+        table_window = tk.Toplevel(self)
+        table_window.title("Registro de Defectos")
+        table_window.geometry("1400x400")
+
+        columns = ("fecha", "numero", "tipo", "encontrado", "removido", "tiempo", "arreglado", "descripcion")
+        tree = ttk.Treeview(table_window, columns=columns, show="headings")
+
+        tree.heading("fecha", text="Fecha")
+        tree.heading("numero", text="Número")
+        tree.heading("tipo", text="Tipo")
+        tree.heading("encontrado", text="Encontrado")
+        tree.heading("removido", text="Removido")
+        tree.heading("tiempo", text="Tiempo de compostura (min)")
+        tree.heading("arreglado", text="Arreglado")
+        tree.heading("descripcion", text="Descripción")
+
+        for defect in getattr(self, 'defects', []):
+            tree.insert("", "end", values=(
+                defect.get("fecha", ""),
+                defect.get("numero", ""),
+                defect.get("tipo", ""),
+                defect.get("encontrado", ""),
+                defect.get("removido", ""),
+                defect.get("tiempo_compostura", ""),
+                defect.get("defecto_arreglado", ""),
+                defect.get("descripcion", "")
+            ))
+
+        tree.pack(fill="both", expand=True)
+        scrollbar = ttk.Scrollbar(table_window, orient="vertical", command=tree.yview)
+        tree.configure(yscroll=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        h_scrollbar = ttk.Scrollbar(table_window, orient="horizontal", command=tree.xview) 
+        tree.configure(xscrollcommand=h_scrollbar.set) 
+        h_scrollbar.pack(side="bottom", fill="x")
 
     def change_project(self):
         """Permite al usuario cambiar de proyecto (abrir uno existente o crear uno nuevo)."""
