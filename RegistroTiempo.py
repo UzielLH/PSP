@@ -381,9 +381,32 @@ class RegistroTiempo(tk.Tk):
         # Crear ventana para registrar defecto
         defect_window = tk.Toplevel(self) 
         defect_window.title("Registrar Defecto") 
-        defect_window.geometry("400x600") 
+        defect_window.geometry("400x700") 
         defect_window.transient(self) 
         defect_window.grab_set()
+        
+        # --- Nuevo: Frame para mostrar la información del instructor y botón para modificar ---
+        # Frame con estilo para mostrar la información del instructor y el botón para modificarlo
+        # Frame con estilo para mostrar la información del instructor y el botón para modificarlo (botón debajo del texto)
+        instructor_frame = ttk.Frame(defect_window, padding="10 10")
+        instructor_frame.pack(fill="x", padx=15, pady=10)
+
+        instructor_name = self.data.get('instructor_name', 'No especificado')
+        instructor_label = ttk.Label(instructor_frame, text=f"Instructor: {instructor_name}", font=("Helvetica", 11, "bold"))
+        instructor_label.pack(side="top", anchor="w", padx=15, pady=(0, 5))
+
+        def modify_instructor():
+            new_name = simpledialog.askstring("Modificar Instructor", "Ingrese nuevo nombre del instructor:", parent=defect_window)
+            if new_name:
+                self.data['instructor_name'] = new_name
+                instructor_label.config(text=f"Instructor: {new_name}")
+                self.save_data()
+
+        modify_button = ttk.Button(instructor_frame, text="Modificar", command=modify_instructor)
+        modify_button.pack(side="top", anchor="w", padx=15)
+
+
+        
         # Fecha: obtener la fecha actual en formato dd/mm/aaaa
         current_date = datetime.now().strftime("%d/%m/%Y")
 
@@ -397,6 +420,7 @@ class RegistroTiempo(tk.Tk):
         fecha_entry.insert(0, current_date)
         fecha_entry.config(state="readonly")
 
+        
         # Campo Número
         tk.Label(defect_window, text="Número:").pack(anchor="w", padx=10, pady=5)
         numero_entry = tk.Entry(defect_window)
