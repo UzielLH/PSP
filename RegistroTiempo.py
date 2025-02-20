@@ -997,7 +997,7 @@ class RegistroTiempo(tk.Tk):
             if not new_file:
                 return
 
-        # Actualizar la ruta del archivo y recargar los datos
+        # Actualizar la ruta del archivo y recargar los datos.
         self.filename = new_file
         self.data = self.load_data()
         self.activities = self.data.get('activities', {})
